@@ -67,7 +67,6 @@ def visit_with_selenium(client_context, url) -> None:
     visit_page(client_context.driver, url)
 
 
-
 def remove_any_unused_text(text: str) -> str:
     text = text.replace('Video 태그를 지원하지 않는 브라우저입니다.', '')
     return text
@@ -131,9 +130,6 @@ def get_message_to_send(context) -> str:
 
     client_context.clean_up()
     return to_return
-
-
-
 
 
 def print_message(message: str):

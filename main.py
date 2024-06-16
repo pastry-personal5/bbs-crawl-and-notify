@@ -4,6 +4,7 @@ then send that content to a telegram chat room with a bot.
 '''
 
 import datetime
+import re
 import signal
 import sys
 from threading import Event
@@ -11,7 +12,6 @@ from threading import Event
 
 from bs4 import BeautifulSoup
 from loguru import logger
-import re
 import requests
 from selenium import webdriver
 import yaml
@@ -72,16 +72,51 @@ def remove_any_unused_text(text: str) -> str:
     return text
 
 
-def get_message_to_send(context) -> str:
-    const_time_to_sleep_between_req_for_href_in_sec = 1
+def visit_article_link(context: dict, client_context: LinkVisitorClientContext, href: str) -> tuple[bool, str]:
     const_time_to_sleep_after_visit_using_selenium = 2
+    const_time_to_sleep_between_req_for_href_in_sec = 1
+    const_timeout_for_requests_get_in_sec = 16
+
+    flag_continue = False
+    text = None
+
+    if href:
+        if context['visited_item_recorder'].is_visited(href):
+            logger.info(f'Already visited: ({href}). Skip it.')
+            flag_continue = True
+        else:
+            context['visited_item_recorder'].add_item(href)
+            url_for_href = 'https://www.fmkorea.com%s' % href
+            try:
+                visit_with_selenium(client_context, url_for_href)
+                context['exit_event'].wait(const_time_to_sleep_after_visit_using_selenium)
+                req_for_href = requests.get(url_for_href, timeout=const_timeout_for_requests_get_in_sec)
+                context['exit_event'].wait(const_time_to_sleep_between_req_for_href_in_sec)
+                soup_for_href = BeautifulSoup(req_for_href.content, "html.parser", from_encoding='cp949')
+                div_tags = soup_for_href.find_all('div', 'xe_content')
+                # print_message(str(div_tags))
+                if div_tags:
+                    if div_tags[0]:
+                        if div_tags[0].text:
+                            text = div_tags[0].text.strip()
+                            text = remove_any_unused_text(text)
+            except Exception:
+                context['exit_event'].wait(const_time_to_sleep_between_req_for_href_in_sec)
+
+    return (flag_continue, text)
+
+
+def get_message_to_send(context) -> str:
+    const_time_to_sleep_after_visit_using_selenium = 2
+    const_timeout_for_requests_get_in_sec = 16
+
     to_return = ''
     page_number = 1
     url = f'https://www.fmkorea.com/index.php?mid=football_world&page={page_number}'
     client_context = create_client_context_with_selenium()
     visit_with_selenium(client_context, url)
     context['exit_event'].wait(const_time_to_sleep_after_visit_using_selenium)
-    req = requests.get(url)
+    req = requests.get(url, timeout=const_timeout_for_requests_get_in_sec)
     soup = BeautifulSoup(req.content, "html.parser", from_encoding='cp949')
     td_tags = soup.find_all('td', 'title hotdeal_var8')
 
@@ -100,29 +135,10 @@ def get_message_to_send(context) -> str:
                 title = first_a_tag.text.strip()
                 # print_message(str(title))
                 href = first_a_tag['href']
-                if href:
-                    if context['visited_item_recorder'].is_visited(href):
-                        logger.info(f'Already visited: ({href}). Skip it.')
-                        continue
-                    else:
-                        context['visited_item_recorder'].add_item(href)
-                    url_for_href = 'https://www.fmkorea.com%s' % href
-                    try:
-                        visit_with_selenium(client_context, url_for_href)
-                        context['exit_event'].wait(const_time_to_sleep_after_visit_using_selenium)
-                        req_for_href = requests.get(url_for_href)
-                    except Exception:
-                        context['exit_event'].wait(const_time_to_sleep_between_req_for_href_in_sec)
-                        continue
-                    context['exit_event'].wait(const_time_to_sleep_between_req_for_href_in_sec)
-                    soup_for_href = BeautifulSoup(req_for_href.content, "html.parser", from_encoding='cp949')
-                    div_tags = soup_for_href.find_all('div', 'xe_content')
-                    # print_message(str(div_tags))
-                    if div_tags:
-                        if div_tags[0]:
-                            if div_tags[0].text:
-                                text = div_tags[0].text.strip()
-                                text = remove_any_unused_text(text)
+                (continue_flag, text) = visit_article_link(context, client_context, href)
+                if continue_flag:
+                    continue
+
         if text:
             to_return = to_return + '- ' + title + ' / ' + text + '\n'
         else:
@@ -195,11 +211,13 @@ def escape_text(text):
 
 
 def send_telegram_message(context, message: str) -> None:
+    const_timeout_for_requests_get_in_sec = 16
+
     bot_token = context['bot_token']
     bot_chat_id = context['bot_chat_id']
     message = escape_text(message)
     url = 'https://api.telegram.org/bot' + bot_token + '/sendMessage?chat_id=' + bot_chat_id + '&parse_mode=Markdown&text=' + message
-    requests.get(url)
+    requests.get(url, timeout=const_timeout_for_requests_get_in_sec)
 
 
 def validate_global_config(global_config):

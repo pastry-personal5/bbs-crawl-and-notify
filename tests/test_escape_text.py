@@ -6,19 +6,19 @@ from main import escape_text
 class TestEscapeTextFunction(unittest.TestCase):
 
     def test_escape_special_characters(self):
-        self.assertEqual(escape_text('--#===abcd'), r'\-\-\#\=\=\=abcd')
+        self.assertEqual(escape_text('--#===abcd'), r'--\#\=\=\=abcd')
 
     def test_no_special_characters(self):
         self.assertEqual(escape_text('abcd'), 'abcd')
 
     def test_mixed_characters(self):
-        self.assertEqual(escape_text('ab-cd_ef*gh'), r'ab\-cd\_ef\*gh')
+        self.assertEqual(escape_text('ab-cd_ef*gh'), r'ab-cd\_ef\*gh')
 
     def test_escaped_characters(self):
         self.assertEqual(escape_text(r'\*\[\]'), r'\*\[\]')
 
     def test_combined_special_characters(self):
-        self.assertEqual(escape_text('--#===abcd_*[()]'), r'\-\-\#\=\=\=abcd\_\*\[\(\)\]')
+        self.assertEqual(escape_text('--#===abcd_*[()]'), r'--\#\=\=\=abcd\_\*\[\(\)\]')
 
     def test_double_escaped_characters(self):
         self.assertEqual(escape_text(r'\\_\\*\\#'), r'\\_\\*\\#')

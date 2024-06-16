@@ -67,6 +67,12 @@ def visit_with_selenium(client_context, url) -> None:
     visit_page(client_context.driver, url)
 
 
+
+def remove_any_unused_text(text: str) -> str:
+    text = text.replace('Video 태그를 지원하지 않는 브라우저입니다.', '')
+    return text
+
+
 def get_message_to_send(context) -> str:
     const_time_to_sleep_between_req_for_href_in_sec = 1
     const_time_to_sleep_after_visit_using_selenium = 2
@@ -117,6 +123,7 @@ def get_message_to_send(context) -> str:
                         if div_tags[0]:
                             if div_tags[0].text:
                                 text = div_tags[0].text.strip()
+                                text = remove_any_unused_text(text)
         if text:
             to_return = to_return + '- ' + title + ' / ' + text + '\n'
         else:
@@ -185,7 +192,8 @@ def run_loop_with_global_config(global_config):
 
 
 def escape_text(text):
-    const_regex_to_escape = r"(?<!\\)(_|\*|\[|\]|\(|\)|\~|`|>|#|\+|-|=|\||\{|\}|\.|\!)"
+    # const_regex_to_escape = r"(?<!\\)(_|\*|\[|\]|\(|\)|\~|`|>|#|\+|-|=|\||\{|\}|\.|\!)"
+    const_regex_to_escape = r"(?<!\\)(_|\*|\[|\]|\(|\)|\~|`|>|#|\+|=|\||\{|\})"
     text = re.sub(const_regex_to_escape, lambda t: "\\"+t.group(), text)
     return text
 
@@ -223,14 +231,7 @@ def load_config_and_run_loop():
     run_loop_with_global_config(global_config)
 
 
-def init_console():
-    # Configure loguru to ensure UTF-8 encoding
-    sys.stdout.reconfigure(encoding='utf-8')
-    sys.stderr.reconfigure(encoding='utf-8')
-
-
 def main():
-    init_console()
     load_config_and_run_loop()
 
 

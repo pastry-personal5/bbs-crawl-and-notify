@@ -1,1 +1,5 @@
-source venv/Scripts/activate
+# This file must be used with "source bin/activate" *from bash*
+# you cannot run it directly
+
+source ./venv/Scripts/activate
+export PYTHONIOENCODING=utf-8

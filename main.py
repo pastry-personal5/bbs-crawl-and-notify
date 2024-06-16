@@ -11,9 +11,30 @@ from threading import Event
 
 from bs4 import BeautifulSoup
 from loguru import logger
+import re
 import requests
 from selenium import webdriver
 import yaml
+
+
+class VisitedItemRecorder:
+    visited_items = set()
+    tags = None
+
+    # `tags` is optional.
+    # `tags` is shallow-copied using `copy()` call.
+    def __init__(self, tags: list):
+        self.tags = tags.copy()
+
+    def is_visited(self, item: str):
+        return item in self.visited_items
+
+    def add_item(self, item: str):
+        self.visited_items.add(item)
+
+    def get_visited_items(self):
+        return self.visited_items
+
 
 class LinkVisitorClientContext:
     driver = None  # It's a Selenium driver.
@@ -75,6 +96,11 @@ def get_message_to_send(context) -> str:
                 # print_message(str(title))
                 href = first_a_tag['href']
                 if href:
+                    if context['visited_item_recorder'].is_visited(href):
+                        logger.info(f'Already visited: ({href}). Skip it.')
+                        continue
+                    else:
+                        context['visited_item_recorder'].add_item(href)
                     url_for_href = 'https://www.fmkorea.com%s' % href
                     try:
                         visit_with_selenium(client_context, url_for_href)
@@ -92,12 +118,15 @@ def get_message_to_send(context) -> str:
                             if div_tags[0].text:
                                 text = div_tags[0].text.strip()
         if text:
-            to_return = to_return + '- ' + title + '/' + text + '\n'
+            to_return = to_return + '- ' + title + ' / ' + text + '\n'
         else:
             to_return = to_return + '- ' + title + '\n'
 
     client_context.clean_up()
     return to_return
+
+
+
 
 
 def print_message(message: str):
@@ -130,9 +159,11 @@ def quit_application(signo, _frame, context):
     sys.exit(-1)
 
 
-def build_context_from_global_config(context: dict, global_config: dict) -> None:
+def init_context_with_global_config(context: dict, global_config: dict) -> None:
     context['bot_token'] = global_config['bot_token']
     context['bot_chat_id'] = global_config['bot_chat_id']
+
+    context['visited_item_recorder'] = VisitedItemRecorder([])
 
 
 def init_signal_functions(context) -> None:
@@ -147,15 +178,22 @@ def init_signal_functions(context) -> None:
 
 def run_loop_with_global_config(global_config):
     context = {}
-    build_context_from_global_config(context, global_config)
+    init_context_with_global_config(context, global_config)
     init_signal_functions(context)
     # global_context = context.copy()  # Look for `quit_application.`
     run_loop_with_context(context)
 
 
+def escape_text(text):
+    const_regex_to_escape = r"(?<!\\)(_|\*|\[|\]|\(|\)|\~|`|>|#|\+|-|=|\||\{|\}|\.|\!)"
+    text = re.sub(const_regex_to_escape, lambda t: "\\"+t.group(), text)
+    return text
+
+
 def send_telegram_message(context, message: str) -> None:
     bot_token = context['bot_token']
     bot_chat_id = context['bot_chat_id']
+    message = escape_text(message)
     url = 'https://api.telegram.org/bot' + bot_token + '/sendMessage?chat_id=' + bot_chat_id + '&parse_mode=Markdown&text=' + message
     requests.get(url)
 

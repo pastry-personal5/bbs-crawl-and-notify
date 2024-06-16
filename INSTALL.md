@@ -8,7 +8,7 @@ To get a chat ID, visit https://medium.com/@ManHay_Hong/how-to-create-a-telegram
 
 Chat with your bot, first.
 
-Open a new tab with your browser, enter https://api.telegram.org/bot&lt;yourtoken&gt;/getUpdates , replace &lt;yourtoken&gt; with your API token, press enter and you should see something like this:
+Open a new tab with your browser, enter `https://api.telegram.org/bot<yourtoken>/getUpdates` , replace `<yourtoken>` with your API token, press enter and you should see something like this:
 
 
 ```

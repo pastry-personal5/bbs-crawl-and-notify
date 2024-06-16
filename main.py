@@ -49,8 +49,7 @@ class LinkVisitorClientContext:
 
 def visit_page(driver, url):
     driver.get(url)
-    title = driver.title
-    if title:
+    if title := driver.title:
         logger.info(f'title ({title})')
 
 
@@ -68,15 +67,10 @@ def visit_with_selenium(client_context, url) -> None:
 
 
 def remove_any_unused_text(text: str) -> str:
-    text = text.replace('Video 태그를 지원하지 않는 브라우저입니다.', '')
-    return text
+    return text.replace('Video 태그를 지원하지 않는 브라우저입니다.', '')
 
 
 def visit_article_link(context: dict, client_context: LinkVisitorClientContext, href: str) -> tuple[bool, str]:
-    const_time_to_sleep_after_visit_using_selenium = 2
-    const_time_to_sleep_between_req_for_href_in_sec = 1
-    const_timeout_for_requests_get_in_sec = 16
-
     flag_continue = False
     text = None
 
@@ -86,20 +80,21 @@ def visit_article_link(context: dict, client_context: LinkVisitorClientContext, 
             flag_continue = True
         else:
             context['visited_item_recorder'].add_item(href)
-            url_for_href = 'https://www.fmkorea.com%s' % href
+            url_for_href = f'https://www.fmkorea.com{href}'
+            const_time_to_sleep_after_visit_using_selenium = 2
+            const_time_to_sleep_between_req_for_href_in_sec = 1
+            const_timeout_for_requests_get_in_sec = 16
+
             try:
                 visit_with_selenium(client_context, url_for_href)
                 context['exit_event'].wait(const_time_to_sleep_after_visit_using_selenium)
                 req_for_href = requests.get(url_for_href, timeout=const_timeout_for_requests_get_in_sec)
                 context['exit_event'].wait(const_time_to_sleep_between_req_for_href_in_sec)
                 soup_for_href = BeautifulSoup(req_for_href.content, "html.parser", from_encoding='cp949')
-                div_tags = soup_for_href.find_all('div', 'xe_content')
-                # print_message(str(div_tags))
-                if div_tags:
-                    if div_tags[0]:
-                        if div_tags[0].text:
-                            text = div_tags[0].text.strip()
-                            text = remove_any_unused_text(text)
+                if div_tags := soup_for_href.find_all('div', 'xe_content'):
+                    if div_tags[0] and div_tags[0].text:
+                        text = div_tags[0].text.strip()
+                        text = remove_any_unused_text(text)
             except Exception:
                 context['exit_event'].wait(const_time_to_sleep_between_req_for_href_in_sec)
 
@@ -140,7 +135,7 @@ def get_message_to_send(context) -> str:
                     continue
 
         if text:
-            to_return = to_return + '- ' + title + ' / ' + text + '\n'
+            to_return = f'{to_return}- {title} / ' + text + '\n'
         else:
             to_return = to_return + '- ' + title + '\n'
 
@@ -158,8 +153,7 @@ def print_message(message: str):
 def run_loop_with_context(context):
     const_time_to_sleep_between_req = 60
     max_count = 120
-    count = 0
-    while count < max_count:
+    for _ in range(max_count):
         logger.info('Trying to fetch content...')
         message_to_send = get_message_to_send(context)
         if len(message_to_send) > 0:
@@ -169,7 +163,6 @@ def run_loop_with_context(context):
         for _ in range(const_time_to_sleep_between_req):
             context['exit_event'].wait(1)
         logger.info(datetime.datetime.now())
-        count += 1
 
 
 def quit_application(signo, _frame, context):
@@ -216,26 +209,23 @@ def send_telegram_message(context, message: str) -> None:
     bot_token = context['bot_token']
     bot_chat_id = context['bot_chat_id']
     message = escape_text(message)
-    url = 'https://api.telegram.org/bot' + bot_token + '/sendMessage?chat_id=' + bot_chat_id + '&parse_mode=Markdown&text=' + message
+    url = f'https://api.telegram.org/bot{bot_token}/sendMessage?chat_id={bot_chat_id}&parse_mode=Markdown&text={message}'
     requests.get(url, timeout=const_timeout_for_requests_get_in_sec)
 
 
 def validate_global_config(global_config):
-    if not 'bot_token' in global_config:
+    if 'bot_token' not in global_config:
         return False
-    if not 'bot_chat_id' in global_config:
+    if 'bot_chat_id' not in global_config:
         return False
     default_bot_token_for_template = '12345:YOUR FULL BOT TOKEN'
-    if global_config['bot_token'] == default_bot_token_for_template:
-        return False
-    return True
+    return global_config['bot_token'] != default_bot_token_for_template
 
 
 def load_config_and_run_loop():
     try:
-        config_file_stream = open('global_config.yaml', 'rb')
-        global_config = yaml.safe_load(config_file_stream)
-        config_file_stream.close()
+        with open('global_config.yaml', 'rb') as config_file_stream:
+            global_config = yaml.safe_load(config_file_stream)
     except IOError as e:
         logger.error(f'An IOError has been occurred: {e}')
         sys.exit(-1)

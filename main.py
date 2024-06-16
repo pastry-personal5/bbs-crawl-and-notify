@@ -3,10 +3,10 @@ This module get contents from the web site,
 then send that content to a telegram chat room with a bot.
 '''
 
-
-from threading import Event
+import datetime
 import signal
 import sys
+from threading import Event
 
 
 from bs4 import BeautifulSoup
@@ -14,10 +14,6 @@ from loguru import logger
 import requests
 from selenium import webdriver
 import yaml
-
-
-# global_context = None
-
 
 class LinkVisitorClientContext:
     driver = None  # It's a Selenium driver.
@@ -33,7 +29,8 @@ class LinkVisitorClientContext:
 def visit_page(driver, url):
     driver.get(url)
     title = driver.title
-    logger.info(f'title ({title})')
+    if title:
+        logger.info(f'title ({title})')
 
 
 def create_client_context_with_selenium() -> LinkVisitorClientContext:
@@ -64,13 +61,10 @@ def get_message_to_send(context) -> str:
 
     logger.info(f'Number of tags: ({len(td_tags)})')
 
-    max_count = 20
-
-    count = 0
-    for td_tag in td_tags:
-        count += 1
-        if count > max_count:
-            break
+    const_max_td_tags = 20
+    limit_number = max(const_max_td_tags, len(td_tags))
+    for i in range(limit_number - 1, -1, -1):
+        td_tag = td_tags[i]
         title = ''
         text = ''
         if td_tag is not None:
@@ -86,7 +80,7 @@ def get_message_to_send(context) -> str:
                         visit_with_selenium(client_context, url_for_href)
                         context['exit_event'].wait(const_time_to_sleep_after_visit_using_selenium)
                         req_for_href = requests.get(url_for_href)
-                    except:
+                    except Exception:
                         context['exit_event'].wait(const_time_to_sleep_between_req_for_href_in_sec)
                         continue
                     context['exit_event'].wait(const_time_to_sleep_between_req_for_href_in_sec)
@@ -122,15 +116,17 @@ def run_loop_with_context(context):
         message_to_send = get_message_to_send(context)
         if len(message_to_send) > 0:
             send_telegram_message(context, message_to_send)
+        logger.info(datetime.datetime.now())
         logger.info('Now sleep...')
         for _ in range(const_time_to_sleep_between_req):
             context['exit_event'].wait(1)
+        logger.info(datetime.datetime.now())
         count += 1
 
 
-def quit_application(signo, _frame):
+def quit_application(signo, _frame, context):
     logger.info(f'Interrupted by {signo}, shutting down...')
-    # global_context['exit_event'].set()
+    # context['exit_event'].set()
     sys.exit(-1)
 
 
@@ -145,8 +141,8 @@ def init_signal_functions(context) -> None:
     Also it sets `context`'s key, value.
     '''
     context['exit_event'] = Event()
-    signal.signal(signal.SIGTERM, quit_application)
-    signal.signal(signal.SIGINT, quit_application)
+    signal.signal(signal.SIGTERM, lambda signo, frame: quit_application(signo, frame, context))
+    signal.signal(signal.SIGINT, lambda signo, frame: quit_application(signo, frame, context))
 
 
 def run_loop_with_global_config(global_config):
@@ -179,7 +175,6 @@ def load_config_and_run_loop():
     try:
         config_file_stream = open('global_config.yaml', 'rb')
         global_config = yaml.safe_load(config_file_stream)
-        print(global_config)
         config_file_stream.close()
     except IOError as e:
         logger.error(f'An IOError has been occurred: {e}')
@@ -190,7 +185,14 @@ def load_config_and_run_loop():
     run_loop_with_global_config(global_config)
 
 
+def init_console():
+    # Configure loguru to ensure UTF-8 encoding
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+
+
 def main():
+    init_console()
     load_config_and_run_loop()
 
 

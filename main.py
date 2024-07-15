@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 from loguru import logger
 import requests
 from selenium import webdriver
+import selenium
 import yaml
 
 
@@ -48,7 +49,13 @@ class LinkVisitorClientContext:
 
 
 def visit_page(driver, url):
-    driver.get(url)
+    try:
+        driver.get(url)
+    except selenium.common.exceptions.WebDriverException as e:
+        logger.error(f'Error visiting {url}')
+        logger.error(e)
+        sys.exit(-1)
+
     if title := driver.title:
         logger.info(f'title ({title})')
 
@@ -166,8 +173,11 @@ def run_loop_with_context(context):
 
 
 def quit_application(signo, _frame, context):
-    logger.info(f'Interrupted by {signo}, shutting down...')
-    # context['exit_event'].set()
+    # `_frame` and `context` are not used. It's intentional.
+    logger.info(f'Interrupted by signal number {signo}, shutting down...')
+    logger.info(_frame)
+    logger.info(context)
+    logger.info(context['exit_event'])
     sys.exit(-1)
 
 
@@ -192,7 +202,6 @@ def run_loop_with_global_config(global_config):
     context = {}
     init_context_with_global_config(context, global_config)
     init_signal_functions(context)
-    # global_context = context.copy()  # Look for `quit_application.`
     run_loop_with_context(context)
 
 

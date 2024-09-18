@@ -19,13 +19,15 @@ import yaml
 
 
 class VisitedItemRecorder:
-    visited_items = set()
-    tags = None
 
-    # `tags` is optional.
-    # `tags` is shallow-copied using `copy()` call.
     def __init__(self, tags: list):
+        """This function initializes the object.
+
+        Args:
+            tags (list): |tags| is optional. |tags| is shallow-copied using `copy()` call.
+        """
         self.tags = tags.copy()
+        self.visited_items = set()
 
     def is_visited(self, item: str):
         return item in self.visited_items
@@ -55,9 +57,6 @@ def visit_page(driver, url):
         logger.error(f'Error visiting {url}')
         logger.error(e)
         sys.exit(-1)
-
-    if title := driver.title:
-        logger.info(f'title ({title})')
 
 
 def create_client_context_with_selenium() -> LinkVisitorClientContext:
@@ -128,6 +127,16 @@ def get_message_to_send(context) -> str:
     limit_number = max(const_max_td_tags, len(td_tags))
     for i in range(limit_number - 1, -1, -1):
         td_tag = td_tags[i]
+
+        # Let's look for a |category|.
+        category = ''
+        tr_tag_for_article_item = td_tag.parent
+        td_tag_for_category = tr_tag_for_article_item.find('td', 'cate')
+        first_a_tag_for_category = td_tag_for_category.find('a')
+        if first_a_tag_for_category is not None:
+            category = first_a_tag_for_category.text.strip()
+
+        # Let's look for a |title| and |text|.
         title = ''
         text = ''
         if td_tag is not None:
@@ -141,10 +150,17 @@ def get_message_to_send(context) -> str:
                 if continue_flag:
                     continue
 
+        # Let's pseudo-escape |title| and |text| to send them using an HTTP GET call.
+        # Escaping is not perfect now.
+        # TODO(pastry-personal5): Fix escaping. Also, fix the style of a telegram message.
+        title = escape_text(title)
         if text:
-            to_return = f'{to_return}- {title} / ' + text + '\n'
+            text = escape_text(text)
+            logger.info(f'- [{category}]{title} ({text})')
+            to_return = f'{to_return}- \\[{category}]{title} ({text})\n'
         else:
-            to_return = to_return + '- ' + title + '\n'
+            logger.info(f'- [{category}]{title}')
+            to_return = f'{to_return}- \\[{category}]{title}\n'
 
     client_context.clean_up()
     return to_return
@@ -217,7 +233,6 @@ def send_telegram_message(context, message: str) -> None:
 
     bot_token = context['bot_token']
     bot_chat_id = context['bot_chat_id']
-    message = escape_text(message)
     url = f'https://api.telegram.org/bot{bot_token}/sendMessage?chat_id={bot_chat_id}&parse_mode=Markdown&text={message}'
     requests.get(url, timeout=const_timeout_for_requests_get_in_sec)
 

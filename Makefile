@@ -23,6 +23,6 @@ style:
 
 
 unittest:
-	python -m unittest tests/test_escape_text.py
+	python -m unittest tests/test_*.py
 
 test: unittest

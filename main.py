@@ -4,7 +4,6 @@ then send that content to a telegram chat room with a bot.
 """
 
 import datetime
-import re
 import signal
 import sys
 from threading import Event
@@ -12,7 +11,6 @@ from threading import Event
 from loguru import logger
 import requests
 
-from link_visitor_client_context import LinkVisitorClientContext
 from crawler_for_fm_korea import CrawlerForFMKorea
 from visited_item_recorder import VisitedItemRecorder
 from global_config_controller import GlobalConfigController

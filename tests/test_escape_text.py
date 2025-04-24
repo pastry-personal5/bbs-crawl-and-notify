@@ -1,6 +1,6 @@
 import unittest
 
-from crawler_for_fm_korea import escape_text
+from bbs_crawl_and_notify.crawler_for_fm_korea import escape_text
 
 
 class TestEscapeTextFunction(unittest.TestCase):

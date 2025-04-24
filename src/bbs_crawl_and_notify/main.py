@@ -1,8 +1,8 @@
 """
-This module get contents from the web site,
-then send that content to a telegram chat room with a bot.
+This module retrieves content from websites
+and sends it to a Telegram chat room using a bot.
 
-To use "dcinside," it's mixing threads and asyncio.
+For "dcinside," it combines the use of threads and asyncio.
 """
 
 from abc import ABC, abstractmethod
@@ -14,11 +14,11 @@ from threading import Event, Thread
 
 from loguru import logger
 
-from notifier_for_telegram import NotifierForTelegram
-from crawler_for_fm_korea import CrawlerForFMKorea
-from crawler_for_dc_inside import CrawlerForDCInside
-from visited_item_recorder import VisitedItemRecorder
-from global_config_controller import GlobalConfigController, GlobalConfigIR
+from bbs_crawl_and_notify.notifier_for_telegram import NotifierForTelegram
+from bbs_crawl_and_notify.crawler_for_fm_korea import CrawlerForFMKorea
+from bbs_crawl_and_notify.crawler_for_dc_inside import CrawlerForDCInside
+from bbs_crawl_and_notify.visited_item_recorder import VisitedItemRecorder
+from bbs_crawl_and_notify.global_config_controller import GlobalConfigController, GlobalConfigIR
 
 
 def quit_application(signo, _frame, global_control_context: dict):

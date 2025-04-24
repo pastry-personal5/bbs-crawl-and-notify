@@ -1,12 +1,11 @@
 import unittest
 from unittest.mock import MagicMock, patch
 from selenium.common.exceptions import WebDriverException
-from crawler_for_fm_korea import visit_page
-from crawler_for_fm_korea import visit_page, remove_urls, remove_video_tag_message
+from bbs_crawl_and_notify.crawler_for_fm_korea import visit_page, remove_urls, remove_video_tag_message
 
 class TestVisitPage(unittest.TestCase):
-    @patch("crawler_for_fm_korea.logger")
-    @patch("crawler_for_fm_korea.sys")
+    @patch("bbs_crawl_and_notify.crawler_for_fm_korea.logger")
+    @patch("bbs_crawl_and_notify.crawler_for_fm_korea.sys")
     def test_visit_page_success(self, mock_sys, mock_logger):
         # Mock the Chrome driver
         mock_driver = MagicMock()
@@ -14,8 +13,8 @@ class TestVisitPage(unittest.TestCase):
 
         # Call the function
         class TestVisitPage(unittest.TestCase):
-            @patch("crawler_for_fm_korea.logger")
-            @patch("crawler_for_fm_korea.sys")
+            @patch("bbs_crawl_and_notify.crawler_for_fm_korea.logger")
+            @patch("bbs_crawl_and_notify.crawler_for_fm_korea.sys")
             def test_visit_page_success(self, mock_sys, mock_logger):
                 # Mock the Chrome driver
                 mock_driver = MagicMock()
@@ -31,8 +30,8 @@ class TestVisitPage(unittest.TestCase):
                 mock_logger.error.assert_not_called()
                 mock_sys.exit.assert_not_called()
 
-            @patch("crawler_for_fm_korea.logger")
-            @patch("crawler_for_fm_korea.sys")
+            @patch("bbs_crawl_and_notify.crawler_for_fm_korea.logger")
+            @patch("bbs_crawl_and_notify.crawler_for_fm_korea.sys")
             def test_visit_page_webdriver_exception(self, mock_sys, mock_logger):
                 # Mock the Chrome driver
                 mock_driver = MagicMock()

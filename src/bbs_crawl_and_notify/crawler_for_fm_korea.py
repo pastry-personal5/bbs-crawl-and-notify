@@ -14,7 +14,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.webdriver import WebDriver as Chrome
 import selenium
 
-from link_visitor_client_context import LinkVisitorClientContext
+from bbs_crawl_and_notify.link_visitor_client_context import LinkVisitorClientContext
 
 
 def visit_page(driver: Chrome, url: str) -> None:

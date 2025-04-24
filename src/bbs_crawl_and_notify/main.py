@@ -1,8 +1,8 @@
 """
-This module retrieves content from websites
-and sends it to a Telegram chat room using a bot.
+This module gets contents from the web site,
+then sends that content to a telegram chat room with a bot.
 
-For "dcinside," it combines the use of threads and asyncio.
+To use "dcinside," it's mixing threads and asyncio.
 """
 
 from abc import ABC, abstractmethod
@@ -10,7 +10,9 @@ import asyncio
 import datetime
 import signal
 import sys
+import threading
 from threading import Event, Thread
+import time
 
 from loguru import logger
 
@@ -24,11 +26,28 @@ from bbs_crawl_and_notify.global_config_controller import GlobalConfigController
 def quit_application(signo, _frame, global_control_context: dict):
     # `_frame` and `context` are not used. It's intentional.
     logger.info(f"Interrupted by signal number {signo}, shutting down...")
-    global_control_context["exit_event"].set()
     logger.info(_frame)
     logger.info(global_control_context)
     logger.info(global_control_context["exit_event"])
-    sys.exit(-1)
+
+    global_control_context["exit_event"].set()
+    logger.info("Exit event is set. Exiting application.")
+
+    # Stop the asyncio event loop
+    if "asyncio_loop" in global_control_context:
+        loop = global_control_context["asyncio_loop"]
+        loop.call_soon_threadsafe(loop.stop)
+
+    logger.info("Waiting for threads to finish...")
+
+    # Allow threads to finish gracefully
+    for thread in threading.enumerate():
+        if thread is not threading.current_thread():
+            logger.info(f"Joining thread: {thread.name}")
+            thread.join(timeout=5)  # Wait for threads to finish (optional timeout)
+
+    logger.info("Exiting application.")
+    sys.exit(0)
 
 
 def init_signal_functions(global_control_context: dict) -> None:
@@ -36,6 +55,7 @@ def init_signal_functions(global_control_context: dict) -> None:
     This function set up signal handlers.
     Also it sets `global_control_context`'s key, value.
     """
+    logger.info("Setting up signal handlers...")
     global_control_context["exit_event"] = Event()
     signal.signal(
         signal.SIGTERM, lambda signo, frame: quit_application(signo, frame, global_control_context)
@@ -43,9 +63,6 @@ def init_signal_functions(global_control_context: dict) -> None:
     signal.signal(
         signal.SIGINT, lambda signo, frame: quit_application(signo, frame, global_control_context)
     )
-
-
-
 
 
 class ChildControllerBase(ABC):
@@ -92,7 +109,6 @@ class ChildControllerForBlockingIO(ChildControllerBase):
 
         t = Thread(target = run_loop_with_context, args = (global_control_context,))
         t.start()
-        t.join()
 
 
 class ChildControllerForAsyncIO(ChildControllerBase):
@@ -105,7 +121,6 @@ class ChildControllerForAsyncIO(ChildControllerBase):
         self.notifier.prepare(global_config)
 
     def start(self, global_control_context: dict) -> None:
-
         def run_loop_with_context(context: dict):
             const_time_to_sleep_between_req = 60
             max_count = 120
@@ -125,7 +140,6 @@ class ChildControllerForAsyncIO(ChildControllerBase):
 
         t = Thread(target = run_loop_with_context, args = (global_control_context,))
         t.start()
-        t.join()
 
 
 class MainController:
@@ -147,9 +161,14 @@ class MainController:
         self._init_asyncio_loop(global_control_context)
         self.run_loop_with_global_control_context(global_control_context)
 
+        # Keep the main thread alive to process signals
+        while not global_control_context["exit_event"].is_set():
+            global_control_context["exit_event"].wait(1)
+
         # Stop.
-        self.loop.call_soon_threadsafe(self.loop.stop)
-        self.loop_thread.join()
+        if self.loop:
+            self.loop.call_soon_threadsafe(self.loop.stop)
+            self.loop_thread.join()
 
     def run_loop_with_global_control_context(self, global_control_context: dict) -> None:
         for controller in self.controllers:

@@ -72,9 +72,12 @@ class CrawlerForFMKorea:
     def __init__(self):
         self.visited_item_recorder = None
 
+    def prepare(self, global_config: dict) -> None:
+        pass
+
     def visit_article_link(
         self,
-        global_signal_context: dict, client_context: LinkVisitorClientContext, href: str
+        global_control_context: dict, client_context: LinkVisitorClientContext, href: str
     ) -> tuple[bool, str]:
         flag_continue = False
         text = None
@@ -92,13 +95,13 @@ class CrawlerForFMKorea:
 
                 try:
                     visit_with_selenium(client_context, url_for_href)
-                    global_signal_context["exit_event"].wait(
+                    global_control_context["exit_event"].wait(
                         const_time_to_sleep_after_visit_using_selenium
                     )
                     req_for_href = requests.get(
                         url_for_href, timeout=const_timeout_for_requests_get_in_sec
                     )
-                    global_signal_context["exit_event"].wait(
+                    global_control_context["exit_event"].wait(
                         const_time_to_sleep_between_req_for_href_in_sec
                     )
                     soup_for_href = BeautifulSoup(
@@ -109,13 +112,13 @@ class CrawlerForFMKorea:
                             text = div_tags[0].text.strip()
                             text = remove_any_unused_text(text)
                 except Exception:
-                    global_signal_context["exit_event"].wait(
+                    global_control_context["exit_event"].wait(
                         const_time_to_sleep_between_req_for_href_in_sec
                     )
 
         return (flag_continue, text)
 
-    def get_message_to_send(self, global_signal_context: dict) -> str:
+    def get_message_to_send(self, global_control_context: dict) -> str:
         const_time_to_sleep_after_visit_using_selenium = 2
         const_timeout_for_requests_get_in_sec = 16
 
@@ -124,7 +127,7 @@ class CrawlerForFMKorea:
         url = f"https://www.fmkorea.com/index.php?mid=football_world&page={page_number}"
         client_context = create_client_context_with_selenium()
         visit_with_selenium(client_context, url)
-        global_signal_context["exit_event"].wait(const_time_to_sleep_after_visit_using_selenium)
+        global_control_context["exit_event"].wait(const_time_to_sleep_after_visit_using_selenium)
         req = requests.get(url, timeout=const_timeout_for_requests_get_in_sec)
         soup = BeautifulSoup(req.content, "html.parser", from_encoding="cp949")
         td_tags = soup.find_all("td", "title hotdeal_var8")
@@ -155,7 +158,7 @@ class CrawlerForFMKorea:
                     # print_message(str(title))
                     href = first_a_tag["href"]
                     (continue_flag, text) = self.visit_article_link(
-                        global_signal_context, client_context, href
+                        global_control_context, client_context, href
                     )
                     if continue_flag:
                         continue

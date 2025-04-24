@@ -80,6 +80,7 @@ class MainController:
         self.controllers = None
 
     def start(self) -> None:
+        logger.info("MainController started.")
         global_config = self.global_config
         self.controllers = self._build_controllers(global_config)
         global_signal_context = {}
@@ -90,7 +91,6 @@ class MainController:
         for controller in self.controllers:
             controller.prepare(self.global_config)
             controller.start(global_signal_context)
-        logger.info("MainController started.")
 
     def read_global_config_and_validate(self) -> None:
         """

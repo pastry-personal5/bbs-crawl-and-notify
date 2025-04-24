@@ -1,4 +1,3 @@
-
 import sys
 
 from loguru import logger
@@ -20,7 +19,7 @@ class GlobalConfigController:
     def validate(self, global_config: GlobalConfigIR) -> bool:
         for validator in self.config_validators:
             if not validator.validate(global_config):
-                logger.error(f"Validation failed for {validator.__class__.__name__}")
+                logger.error(f"Validation failed for {validator.__class__.__name__}. Please check the configuration file and ensure all required fields are correctly set.")
                 return False
         return True
 
@@ -33,8 +32,14 @@ class GlobalConfigController:
                 global_config = GlobalConfigIR()
                 global_config.config = global_config_dict
                 return global_config
+        except FileNotFoundError:
+            logger.error("The global_config.yaml file was not found. Please ensure the file exists in the project root directory.")
+            sys.exit(-1)
+        except yaml.YAMLError as e:
+            logger.error(f"Error parsing the global_config.yaml file: {e}. Please ensure the file is properly formatted YAML.")
+            sys.exit(-1)
         except IOError as e:
-            logger.error(f"An IOError has been occurred: {e}")
+            logger.error(f"An IOError occurred while reading the global_config.yaml file: {e}. Please check file permissions and try again.")
             sys.exit(-1)
 
 

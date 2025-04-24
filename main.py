@@ -9,8 +9,8 @@ import sys
 from threading import Event, Thread
 
 from loguru import logger
-import requests
 
+from notifier_for_telegram import NotifierForTelegram
 from crawler_for_fm_korea import CrawlerForFMKorea
 from visited_item_recorder import VisitedItemRecorder
 from global_config_controller import GlobalConfigController, GlobalConfigIR
@@ -72,24 +72,6 @@ class ChildController:
         t.join()
 
 
-class NotifierForTelegram:
-    def __init__(self):
-        self.bot_token = None
-        self.bot_chat_id = None
-
-    def prepare(self, global_config: GlobalConfigIR) -> None:
-        self.bot_token = global_config.config["notifier"]["telegram"]["config"]["bot_token"]
-        self.bot_chat_id = global_config.config["notifier"]["telegram"]["config"]["bot_chat_id"]
-
-    def notify(self, message: str) -> None:
-        const_timeout_for_requests_get_in_sec = 16
-
-        bot_token = self.bot_token
-        bot_chat_id = self.bot_chat_id
-        url = f"https://api.telegram.org/bot{bot_token}/sendMessage?chat_id={bot_chat_id}&parse_mode=Markdown&text={message}"
-        requests.get(url, timeout=const_timeout_for_requests_get_in_sec)
-
-
 class MainController:
 
     def __init__(self):
@@ -131,7 +113,7 @@ class MainController:
         child_controller = ChildController()
         crawler_for_fm_korea = CrawlerForFMKorea()
         child_controller.crawler = crawler_for_fm_korea
-        child_controller.visited_item_recorder = VisitedItemRecorder([])
+        child_controller.crawler.visited_item_recorder = VisitedItemRecorder([])
         notifier_for_telegram = NotifierForTelegram()
         notifier_for_telegram.prepare(global_config)
         child_controller.notifier = notifier_for_telegram

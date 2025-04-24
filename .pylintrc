@@ -1,0 +1,2 @@
+[MESSAGES CONTROL]
+disable=line-too-long,consider-using-f-string,consider-using-with,missing-function-docstring,missing-class-docstring,missing-module-docstring

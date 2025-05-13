@@ -9,6 +9,7 @@ class GlobalConfigIR:
     def __init__(self):
         self.config = {}
 
+
 class GlobalConfigController:
 
     def __init__(self):

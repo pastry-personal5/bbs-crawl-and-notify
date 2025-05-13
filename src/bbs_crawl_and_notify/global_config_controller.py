@@ -56,7 +56,6 @@ class TelegramNotifierConfigValidator(ConfigValidatorBase):
 
     def __init__(self):
         super().__init__()
-        self.config = {}
 
     def validate(self, global_config: GlobalConfigIR) -> bool:
         try:

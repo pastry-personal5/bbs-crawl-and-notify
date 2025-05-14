@@ -156,7 +156,7 @@ class CrawlerForDCInside:
 
             t = Thread(target=run_coroutine_to_fetch, args=(q, board_id, self.max_of_id_dict[board_id], global_control_context,), daemon=True)
             self.child_threads.append(t)
-            logger.info("Starting DCInside crawler thread for {board_id}...")
+            logger.info(f"Starting DCInside crawler thread for Board ID {board_id}...")
             t.start()
 
 

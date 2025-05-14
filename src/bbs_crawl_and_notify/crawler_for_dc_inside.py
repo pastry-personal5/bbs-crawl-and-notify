@@ -72,9 +72,10 @@ async def fetch(board_id: str, max_of_id: int, global_control_context: dict) -> 
 
     api = dc_api.API()
     logger.info("Trying to fetch board messages...")
+    logger.info(f"Board ID: {board_id}")
+    logger.info(f"Max of ID: {max_of_id}")
 
     try:
-        logger.info(f"For now, only {board_id} is crawled.")
         index_generator = None
         if max_of_id != 0:
             index_generator = api.board(
@@ -95,7 +96,6 @@ async def fetch(board_id: str, max_of_id: int, global_control_context: dict) -> 
         )
         async for index in timed_index_generator:
             if index:
-                logger.info(" ... index.id " + index.id)
                 if int(index.id) > max_of_id:
                     max_of_id = int(index.id)
                 message += index.title + "\n"
@@ -105,7 +105,8 @@ async def fetch(board_id: str, max_of_id: int, global_control_context: dict) -> 
         await api.close()
 
         result_to_return = {}
-        result_to_return["message"] = message
+        result_to_return["board_id"] = board_id
+        result_to_return["message"] = board_id + '\n' + message
         result_to_return["max_of_id"] = max_of_id
 
         logger.info(result_to_return)
@@ -114,11 +115,11 @@ async def fetch(board_id: str, max_of_id: int, global_control_context: dict) -> 
     except asyncio.CancelledError:
         logger.info("Fetch coroutine was cancelled.")
         await api.close()
-        return {"message": "", "max_of_id": max_of_id}
+        return {"message": "", "max_of_id": max_of_id, "board_id": board_id}
     except Exception as e:
         logger.error(f"Exception in fetch coroutine: {e}")
         await api.close()
-        return {"message": "", "max_of_id": max_of_id}
+        return {"message": "", "max_of_id": max_of_id, "board_id": board_id}
 
 
 class CrawlerForDCInside:
@@ -126,23 +127,38 @@ class CrawlerForDCInside:
     def __init__(self):
         self.visited_item_recorder = None
         self.boards = None
-        self.max_of_id = 0
+        self.max_of_id_dict = {}
+        self.child_threads = []
+        self.controller_message_queue = None  # This is a shared object. The lifecycle of this queue is managed by the parent.
 
     def prepare(self, global_config: GlobalConfigIR) -> None:
         self.boards = global_config.config["crawler"]["dc_inside"]["config"]["boards"]
         logger.info(self.boards)
 
-    def get_message_to_send(self, global_control_context: dict) -> None:
-        logger.info("Starting DCInside crawler...")
+    def set_controller_message_queue(self, controller_message_queue: queue.Queue) -> None:
+        self.controller_message_queue = controller_message_queue
+
+    def start(self, global_control_context: dict) -> None:
+        """
+        Starts the crawler for DCInside.
+        This method creates threads to fetch data from the DCInside API.
+        It uses a queue to communicate results back to the main thread.
+        """
+
         q = queue.Queue()  # Thread-safe queue for results
-        board_id = self.boards[0]["id"]
 
-        if not board_id:
-            logger.warning("No board ID found. Exiting...")
-            return ""
+        for board in self.boards:
+            board_id = board["id"]
+            if board_id == "":
+                logger.warning("Board ID is empty. Continue...")
+                continue
+            self.max_of_id_dict[board_id] = 0
 
-        t = Thread(target=run_coroutine_to_fetch, args=(q, board_id, self.max_of_id, global_control_context,), daemon=True)
-        t.start()
+            t = Thread(target=run_coroutine_to_fetch, args=(q, board_id, self.max_of_id_dict[board_id], global_control_context,), daemon=True)
+            self.child_threads.append(t)
+            logger.info("Starting DCInside crawler thread for {board_id}...")
+            t.start()
+
 
         # Wait for result from thread or exit event
         while not global_control_context["exit_event"].is_set():
@@ -150,12 +166,17 @@ class CrawlerForDCInside:
                 result = q.get(timeout=1)  # Check periodically
                 if result is not None:
                     logger.info(f"Main received: {result}")
-                    self.max_of_id = result["max_of_id"]
-                    t.join()
-                    return result["message"]
+                    board_id = result["board_id"]
+                    max_of_id = result["max_of_id"]
+                    if board_id not in self.max_of_id_dict:
+                        logger.warning(f"Board ID {board_id} not found in max_of_id_dict.")
+                        continue
+                    self.max_of_id_dict[board_id] = max_of_id
+                    logger.info(f"Updated max_of_id_dict: {self.max_of_id_dict}")
+                    self.controller_message_queue.put(result)
             except queue.Empty:
                 continue  # Keep waiting if no result yet
 
-        logger.info("Exit event set. Exiting get_message_to_send.")
-        t.join()
-        return ""
+        logger.info("Exit event set. Exiting...")
+        for t in self.child_threads:
+            t.join(timeout=1)

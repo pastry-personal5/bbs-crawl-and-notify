@@ -8,11 +8,11 @@ To use "dcinside," it's mixing threads and asyncio.
 from abc import ABC, abstractmethod
 import asyncio
 import datetime
+import queue
 import signal
 import sys
 import threading
 from threading import Event, Thread
-import time
 
 from loguru import logger
 
@@ -48,21 +48,6 @@ def quit_application(signo, _frame, global_control_context: dict):
 
     logger.info("Exiting application.")
     sys.exit(0)
-
-
-def init_signal_functions(global_control_context: dict) -> None:
-    """
-    This function set up signal handlers.
-    Also it sets `global_control_context`'s key, value.
-    """
-    logger.info("Setting up signal handlers...")
-    global_control_context["exit_event"] = Event()
-    signal.signal(
-        signal.SIGTERM, lambda signo, frame: quit_application(signo, frame, global_control_context)
-    )
-    signal.signal(
-        signal.SIGINT, lambda signo, frame: quit_application(signo, frame, global_control_context)
-    )
 
 
 class ChildControllerBase(ABC):
@@ -115,20 +100,31 @@ class ChildControllerForAsyncIO(ChildControllerBase):
 
     def __init__(self):
         super().__init__()
+        self.controller_message_queue = queue.Queue()
 
     def prepare(self, global_config: GlobalConfigIR) -> None:
         self.crawler.prepare(global_config)
+        self.crawler.set_controller_message_queue(self.controller_message_queue)
         self.notifier.prepare(global_config)
 
     def start(self, global_control_context: dict) -> None:
-        def run_loop_with_context(context: dict):
+        def run_loop_with_context(context: dict, q: queue.Queue):
             const_time_to_sleep_between_req = 60
             max_count = 120
+
+            self.crawler.start(context)
+
             for _ in range(max_count):
                 logger.info("Trying to fetch content...")
-                message_to_send = self.crawler.get_message_to_send(context)
-                if len(message_to_send) > 0:
-                    self.notifier.notify(message_to_send)
+                while not q.empty():
+                    result = q.get()
+                    message = result["message"]
+                    if len(message) > 0:
+                        logger.info(f"Processing message: {message}")
+                        # Process the message here
+                        # For example, you can call the notifier to send the message
+                        self.notifier.notify(message)
+
                 logger.info(datetime.datetime.now())
                 logger.info("Now sleep...")
                 for _ in range(const_time_to_sleep_between_req):
@@ -138,7 +134,7 @@ class ChildControllerForAsyncIO(ChildControllerBase):
                     context["exit_event"].wait(1)
                 logger.info(datetime.datetime.now())
 
-        t = Thread(target = run_loop_with_context, args = (global_control_context,))
+        t = Thread(target = run_loop_with_context, args = (global_control_context, self.controller_message_queue,))
         t.start()
 
 
@@ -147,19 +143,20 @@ class MainController:
     def __init__(self):
         self.global_config_controller = GlobalConfigController()
         self.global_config = None
-        self.controllers = None
+        self.child_controllers = None
 
         self.loop = None
         self.loop_thread = None
 
-    def run(self) -> None:
+    def do_main_loop(self) -> None:
         logger.info("Starting MainController...")
         global_config = self.global_config
-        self.controllers = self._build_controllers(global_config)
+        self.child_controllers = self._build_child_controllers(global_config)
+
         global_control_context = {}
-        init_signal_functions(global_control_context)
+        self._init_signal_functions(global_control_context)
         self._init_asyncio_loop(global_control_context)
-        self.run_loop_with_global_control_context(global_control_context)
+        self._start_child_controllers(global_control_context)
 
         # Keep the main thread alive to process signals
         while not global_control_context["exit_event"].is_set():
@@ -170,8 +167,8 @@ class MainController:
             self.loop.call_soon_threadsafe(self.loop.stop)
             self.loop_thread.join()
 
-    def run_loop_with_global_control_context(self, global_control_context: dict) -> None:
-        for controller in self.controllers:
+    def _start_child_controllers(self, global_control_context: dict) -> None:
+        for controller in self.child_controllers:
             controller.prepare(self.global_config)
             controller.start(global_control_context)
 
@@ -184,6 +181,20 @@ class MainController:
         if not global_config_controller.validate(self.global_config):
             logger.error("Global config validation failed.")
             sys.exit(-1)
+
+    def _init_signal_functions(self, global_control_context: dict) -> None:
+        """
+        This function set up signal handlers.
+        Also it sets `global_control_context`'s key, value.
+        """
+        logger.info("Setting up signal handlers...")
+        global_control_context["exit_event"] = Event()
+        signal.signal(
+            signal.SIGTERM, lambda signo, frame: quit_application(signo, frame, global_control_context)
+        )
+        signal.signal(
+            signal.SIGINT, lambda signo, frame: quit_application(signo, frame, global_control_context)
+        )
 
     def _init_asyncio_loop(self, global_control_context: dict) -> None:
         """
@@ -198,7 +209,7 @@ class MainController:
 
         global_control_context["asyncio_loop"] = self.loop
 
-    def _build_controllers(self, global_config: GlobalConfigIR) -> list:
+    def _build_child_controllers(self, global_config: GlobalConfigIR) -> list:
         """
         This function builds controllers based on the global config.
         """
@@ -206,7 +217,7 @@ class MainController:
 
         # For now, we have two controllers.
         # In the future, we can add more controllers based on the global config as pipelines.
-        if True:
+        if False:
             child_controller_for_fm_korea = ChildControllerForBlockingIO()
             crawler_for_fm_korea = CrawlerForFMKorea()
             child_controller_for_fm_korea.crawler = crawler_for_fm_korea
@@ -232,7 +243,7 @@ class MainController:
 def load_config_and_run_loop():
     main_controller = MainController()
     main_controller.read_global_config_and_validate()
-    main_controller.run()
+    main_controller.do_main_loop()
 
 
 def main():

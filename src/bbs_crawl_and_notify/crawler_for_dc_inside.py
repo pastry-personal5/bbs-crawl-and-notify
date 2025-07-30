@@ -12,7 +12,7 @@ class _AsyncTimedIterator:
 
     __slots__ = ("_iterator", "_timeout", "_sentinel")
 
-    def __init__(self, iterable, timeout, sentinel):
+    def __init__(self, iterable, timeout: float, sentinel):
         self._iterator = iterable.__aiter__()
         self._timeout = timeout
         self._sentinel = sentinel
@@ -42,18 +42,28 @@ def run_coroutine_to_fetch(q: queue.Queue, board_id: str, max_of_id: int, global
     """
     logger.info(f"Starting coroutine... with max_of_id({max_of_id})")
     try:
-        future = asyncio.run_coroutine_threadsafe(
-            fetch(board_id, max_of_id, global_control_context),
-            global_control_context["asyncio_loop"]
-        )
+
         while not global_control_context["exit_event"].is_set():
+
+            future = asyncio.run_coroutine_threadsafe(
+                fetch(board_id, max_of_id, global_control_context),
+                global_control_context["asyncio_loop"]
+            )
             try:
                 result_from_call = future.result(timeout=1)  # Check periodically
                 logger.info(f"Thread received: {result_from_call}")
+                max_of_id = result_from_call["max_of_id"]
                 q.put(result_from_call)
-                return
             except asyncio.TimeoutError:
                 continue  # Keep waiting if no result yet
+            logger.info(f"Result from fetch: {result_from_call}")
+            const_time_to_sleep_between_req_in_sec = 60
+            for _ in range(const_time_to_sleep_between_req_in_sec):
+                if global_control_context["exit_event"].is_set():
+                    logger.info("Exit event is set. Exiting loop.")
+                    return
+                global_control_context["exit_event"].wait(1)
+
     except Exception as e:
         logger.error("Exception in coroutine:", e)
         q.put(None)  # Signal failure
@@ -145,38 +155,45 @@ class CrawlerForDCInside:
         It uses a queue to communicate results back to the main thread.
         """
 
-        q = queue.Queue()  # Thread-safe queue for results
+        def run_loop(global_control_context: dict) -> None:
 
-        for board in self.boards:
-            board_id = board["id"]
-            if board_id == "":
-                logger.warning("Board ID is empty. Continue...")
-                continue
-            self.max_of_id_dict[board_id] = 0
+            logger.info("Starting CrawlerForDCInside...")
 
-            t = Thread(target=run_coroutine_to_fetch, args=(q, board_id, self.max_of_id_dict[board_id], global_control_context,), daemon=True)
-            self.child_threads.append(t)
-            logger.info(f"Starting DCInside crawler thread for Board ID {board_id}...")
-            t.start()
+            q = queue.Queue()  # Thread-safe queue for results
+
+            for board in self.boards:
+                board_id = board["id"]
+                if board_id == "":
+                    logger.warning("Board ID is empty. Continue...")
+                    continue
+                self.max_of_id_dict[board_id] = 0
+
+                t = Thread(target=run_coroutine_to_fetch, args=(q, board_id, self.max_of_id_dict[board_id], global_control_context,), daemon=True)
+                self.child_threads.append(t)
+                logger.info(f"Starting DCInside crawler thread for Board ID {board_id}...")
+                t.start()
 
 
-        # Wait for result from thread or exit event
-        while not global_control_context["exit_event"].is_set():
-            try:
-                result = q.get(timeout=1)  # Check periodically
-                if result is not None:
-                    logger.info(f"Main received: {result}")
-                    board_id = result["board_id"]
-                    max_of_id = result["max_of_id"]
-                    if board_id not in self.max_of_id_dict:
-                        logger.warning(f"Board ID {board_id} not found in max_of_id_dict.")
-                        continue
-                    self.max_of_id_dict[board_id] = max_of_id
-                    logger.info(f"Updated max_of_id_dict: {self.max_of_id_dict}")
-                    self.controller_message_queue.put(result)
-            except queue.Empty:
-                continue  # Keep waiting if no result yet
+            # Wait for result from thread or exit event
+            while not global_control_context["exit_event"].is_set():
+                try:
+                    result = q.get(timeout=1)  # Check periodically
+                    if result is not None and result["message"] != result["board_id"] + '\n':
+                        logger.info(f"Main received: {result}")
+                        board_id = result["board_id"]
+                        max_of_id = result["max_of_id"]
+                        if board_id not in self.max_of_id_dict:
+                            logger.warning(f"Board ID {board_id} not found in max_of_id_dict.")
+                            continue
+                        self.max_of_id_dict[board_id] = max_of_id
+                        logger.info(f"Updated max_of_id_dict: {self.max_of_id_dict}")
+                        self.controller_message_queue.put(result)
+                except queue.Empty:
+                    continue  # Keep waiting if no result yet
 
-        logger.info("Exit event set. Exiting...")
-        for t in self.child_threads:
-            t.join(timeout=1)
+            logger.info("Exit event set. Exiting...")
+            for t in self.child_threads:
+                t.join(timeout=1)
+
+        t = Thread(target = run_loop, args = (global_control_context,))
+        t.start()

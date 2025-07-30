@@ -108,7 +108,13 @@ class ChildControllerForAsyncIO(ChildControllerBase):
         self.notifier.prepare(global_config)
 
     def start(self, global_control_context: dict) -> None:
+
+        logger.info("Starting ChildControllerForAsyncIO...")
+
         def run_loop_with_context(context: dict, q: queue.Queue):
+
+            logger.info("Starting run_loop_with_context...")
+
             const_time_to_sleep_between_req = 60
             max_count = 120
 

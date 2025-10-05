@@ -5,7 +5,7 @@ from threading import Thread
 import dc_api
 from loguru import logger
 
-from bbs_crawl_and_notify.global_config_controller import GlobalConfigIR
+from src.bbs_crawl_and_notify.global_config_controller import GlobalConfigIR
 
 
 class _AsyncTimedIterator:
@@ -39,8 +39,9 @@ def run_coroutine_to_fetch(q: queue.Queue, board_id: str, max_of_id: int, global
     """
     Runs the coroutine to fetch data in a separate thread.
     Checks for the exit_event to terminate gracefully.
+
     """
-    logger.info(f"Starting coroutine... with max_of_id({max_of_id})")
+    logger.info(f"[async component] Starting coroutine... with max_of_id({max_of_id})")
     try:
 
         while not global_control_context["exit_event"].is_set():
@@ -51,24 +52,26 @@ def run_coroutine_to_fetch(q: queue.Queue, board_id: str, max_of_id: int, global
             )
             try:
                 result_from_call = future.result(timeout=1)  # Check periodically
-                logger.info(f"Thread received: {result_from_call}")
+                logger.info(f"[async component] _[run_coroutine_to_fetch] Received: {result_from_call}")
                 max_of_id = result_from_call["max_of_id"]
                 q.put(result_from_call)
             except asyncio.TimeoutError:
                 continue  # Keep waiting if no result yet
+            const_time_to_sleep_between_req_in_sec = 15
             logger.info(f"Result from fetch: {result_from_call}")
-            const_time_to_sleep_between_req_in_sec = 60
+            logger.info(f"Updated max_of_id: {max_of_id}")
+            logger.info(f"Sleeping before next fetch for {const_time_to_sleep_between_req_in_sec} seconds...")
             for _ in range(const_time_to_sleep_between_req_in_sec):
                 if global_control_context["exit_event"].is_set():
-                    logger.info("Exit event is set. Exiting loop.")
+                    logger.info("_[run_coroutine_to_fetch] Exit event is set. Exiting loop.")
                     return
                 global_control_context["exit_event"].wait(1)
 
     except Exception as e:
-        logger.error("Exception in coroutine:", e)
+        logger.error("[async component] _[run_coroutine_to_fetch] Exception in coroutine:", e)
         q.put(None)  # Signal failure
     finally:
-        logger.info("Exiting coroutine thread.")
+        logger.info("[async component] -[run_coroutine_to_fetch] Exiting coroutine thread.")
 
 
 async def fetch(board_id: str, max_of_id: int, global_control_context: dict) -> dict:
@@ -168,18 +171,19 @@ class CrawlerForDCInside:
                     continue
                 self.max_of_id_dict[board_id] = 0
 
-                t = Thread(target=run_coroutine_to_fetch, args=(q, board_id, self.max_of_id_dict[board_id], global_control_context,), daemon=True)
+                t = Thread(target=run_coroutine_to_fetch, name=f"CrawlerForDCInside::...({board_id})", args=(q, board_id, self.max_of_id_dict[board_id], global_control_context,), daemon=True)
                 self.child_threads.append(t)
-                logger.info(f"Starting DCInside crawler thread for Board ID {board_id}...")
+                logger.info(f"Starting DCInside crawler thread for Board ID({board_id})...")
                 t.start()
 
-
+            logger.info("_[CrawlerForDCInside][start][run_loop] Now looping...")
             # Wait for result from thread or exit event
             while not global_control_context["exit_event"].is_set():
                 try:
                     result = q.get(timeout=1)  # Check periodically
+                    logger.info(result)
                     if result is not None and result["message"] != result["board_id"] + '\n':
-                        logger.info(f"Main received: {result}")
+                        logger.info(f"CrawlerForDCInside received: {result}")
                         board_id = result["board_id"]
                         max_of_id = result["max_of_id"]
                         if board_id not in self.max_of_id_dict:
@@ -191,9 +195,9 @@ class CrawlerForDCInside:
                 except queue.Empty:
                     continue  # Keep waiting if no result yet
 
-            logger.info("Exit event set. Exiting...")
+            logger.info("_[CrawlerForDCInside][start][run_loop] Exit event set. Exiting...")
             for t in self.child_threads:
                 t.join(timeout=1)
 
-        t = Thread(target = run_loop, args = (global_control_context,))
+        t = Thread(target=run_loop, name="CrawlerForDCInside::start::run_loop", args=(global_control_context,))
         t.start()

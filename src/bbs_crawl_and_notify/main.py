@@ -16,11 +16,11 @@ from threading import Event, Thread
 
 from loguru import logger
 
-from bbs_crawl_and_notify.notifier_for_telegram import NotifierForTelegram
-from bbs_crawl_and_notify.crawler_for_fm_korea import CrawlerForFMKorea
-from bbs_crawl_and_notify.crawler_for_dc_inside import CrawlerForDCInside
-from bbs_crawl_and_notify.visited_item_recorder import VisitedItemRecorder
-from bbs_crawl_and_notify.global_config_controller import GlobalConfigController, GlobalConfigIR
+from src.bbs_crawl_and_notify.notifier_for_telegram import NotifierForTelegram
+from src.bbs_crawl_and_notify.crawler_for_fm_korea import CrawlerForFMKorea
+from src.bbs_crawl_and_notify.crawler_for_dc_inside import CrawlerForDCInside
+from src.bbs_crawl_and_notify.visited_item_recorder import VisitedItemRecorder
+from src.bbs_crawl_and_notify.global_config_controller import GlobalConfigController, GlobalConfigIR
 
 
 def quit_application(signo, _frame, global_control_context: dict):
@@ -76,8 +76,8 @@ class ChildControllerForBlockingIO(ChildControllerBase):
 
     def start(self, global_control_context: dict) -> None:
         def run_loop_with_context(context: dict):
-            const_time_to_sleep_between_req = 60
-            max_count = 120
+            const_time_to_sleep_between_req = 15
+            max_count = 12 * 60
             for _ in range(max_count):
                 logger.info("Trying to fetch content...")
                 message_to_send = self.crawler.get_message_to_send(context)
@@ -115,8 +115,8 @@ class ChildControllerForAsyncIO(ChildControllerBase):
 
             logger.info("Starting run_loop_with_context...")
 
-            const_time_to_sleep_between_req = 60
-            max_count = 120
+            const_time_to_sleep_between_req = 15
+            max_count = 12 * 60
 
             self.crawler.start(context)
 

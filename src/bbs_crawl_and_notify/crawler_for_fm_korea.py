@@ -14,7 +14,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.webdriver import WebDriver as Chrome
 import selenium
 
-from bbs_crawl_and_notify.link_visitor_client_context import LinkVisitorClientContext
+from src.bbs_crawl_and_notify.link_visitor_client_context import LinkVisitorClientContext
 
 
 def visit_page(driver: Chrome, url: str) -> None:
@@ -119,6 +119,7 @@ class CrawlerForFMKorea:
         return (flag_continue, text)
 
     def get_message_to_send(self, global_control_context: dict) -> str:
+        logger.info("+[CrawlerForFMKorea::get_message_to_send] ")
         const_time_to_sleep_after_visit_using_selenium = 2
         const_timeout_for_requests_get_in_sec = 16
 
@@ -135,7 +136,9 @@ class CrawlerForFMKorea:
         logger.info(f"Number of tags: ({len(td_tags)})")
 
         const_max_td_tags = 20
-        limit_number = max(const_max_td_tags, len(td_tags))
+        # Use the smaller of the configured maximum and the actual number of tags
+        limit_number = min(const_max_td_tags, len(td_tags))
+        # Iterate from newest to oldest within the selected slice
         for i in range(limit_number - 1, -1, -1):
             td_tag = td_tags[i]
 

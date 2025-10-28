@@ -1,6 +1,6 @@
 import requests
 
-from src.bbs_crawl_and_notify.global_config_controller import GlobalConfigIR
+from bbs_crawl_and_notify.global_config_controller import GlobalConfigIR
 
 
 class NotifierForTelegram:

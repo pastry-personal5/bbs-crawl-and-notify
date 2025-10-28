@@ -1,11 +1,12 @@
 import asyncio
+import concurrent.futures
 import queue
 from threading import Thread
 
 import dc_api
 from loguru import logger
 
-from src.bbs_crawl_and_notify.global_config_controller import GlobalConfigIR
+from bbs_crawl_and_notify.global_config_controller import GlobalConfigIR
 
 
 class _AsyncTimedIterator:
@@ -42,36 +43,41 @@ def run_coroutine_to_fetch(q: queue.Queue, board_id: str, max_of_id: int, global
 
     """
     logger.info(f"[async component] Starting coroutine... with max_of_id({max_of_id})")
+    const_timeout_upper_limit_in_sec = 64
+    const_timeout_lower_limit_in_sec = 8
+    timeout_in_sec = const_timeout_lower_limit_in_sec
     try:
-
         while not global_control_context["exit_event"].is_set():
-
             future = asyncio.run_coroutine_threadsafe(
                 fetch(board_id, max_of_id, global_control_context),
                 global_control_context["asyncio_loop"]
             )
             try:
-                result_from_call = future.result(timeout=1)  # Check periodically
-                logger.info(f"[async component] _[run_coroutine_to_fetch] Received: {result_from_call}")
+                logger.info(f"[async component] Timeout: ({timeout_in_sec}) seonds")
+                result_from_call = future.result(timeout=timeout_in_sec)
+                logger.info(f"[async component] Received: {result_from_call}")
                 max_of_id = result_from_call["max_of_id"]
                 q.put(result_from_call)
-            except asyncio.TimeoutError:
-                continue  # Keep waiting if no result yet
-            const_time_to_sleep_between_req_in_sec = 15
-            logger.info(f"Result from fetch: {result_from_call}")
-            logger.info(f"Updated max_of_id: {max_of_id}")
-            logger.info(f"Sleeping before next fetch for {const_time_to_sleep_between_req_in_sec} seconds...")
-            for _ in range(const_time_to_sleep_between_req_in_sec):
-                if global_control_context["exit_event"].is_set():
-                    logger.info("_[run_coroutine_to_fetch] Exit event is set. Exiting loop.")
-                    return
-                global_control_context["exit_event"].wait(1)
+                logger.info(f"[async component] Result from fetch: {result_from_call}")
+                logger.info(f"[async component] Updated max_of_id: {max_of_id}")
 
+                const_time_to_sleep_between_req_in_sec = 15
+                logger.info(f"[async component] Sleeping before next fetch for {const_time_to_sleep_between_req_in_sec} seconds...")
+                for _ in range(const_time_to_sleep_between_req_in_sec):
+                    if global_control_context["exit_event"].is_set():
+                        logger.info("[async component] Exit event is set. Exiting loop.")
+                        return
+                    global_control_context["exit_event"].wait(1)
+            except concurrent.futures.TimeoutError:
+                logger.info("[async component] Timeout while waiting for fetch result; retrying immediately")
+                timeout_in_sec = timeout_in_sec * 2
+                if timeout_in_sec > const_timeout_upper_limit_in_sec:
+                    timeout_in_sec = const_timeout_upper_limit_in_sec
     except Exception as e:
-        logger.error("[async component] _[run_coroutine_to_fetch] Exception in coroutine:", e)
+        logger.error(f"[async component] Exception in coroutine: {e}")
         q.put(None)  # Signal failure
     finally:
-        logger.info("[async component] -[run_coroutine_to_fetch] Exiting coroutine thread.")
+        logger.info("[async component] Exiting coroutine thread.")
 
 
 async def fetch(board_id: str, max_of_id: int, global_control_context: dict) -> dict:
@@ -82,11 +88,10 @@ async def fetch(board_id: str, max_of_id: int, global_control_context: dict) -> 
     const_num_first_fetch = 16
     const_num_normal_fetch = 16
 
-
     api = dc_api.API()
-    logger.info("Trying to fetch board messages...")
-    logger.info(f"Board ID: {board_id}")
-    logger.info(f"Max of ID: {max_of_id}")
+    logger.info("_[fetch] Trying to fetch board messages...")
+    logger.info(f"_[fetch] Board ID: {board_id}")
+    logger.info(f"_[fetch]Max of ID: {max_of_id}")
 
     try:
         index_generator = None
@@ -101,7 +106,7 @@ async def fetch(board_id: str, max_of_id: int, global_control_context: dict) -> 
             index_generator = api.board(
                 board_id, start_page=1, num=const_num_first_fetch
             )
-        logger.info("Done!")
+        logger.info("_[fetch] Done!")
         message = ""
         cnt = 0
         timed_index_generator = AsyncTimedIterable(
@@ -143,6 +148,7 @@ class CrawlerForDCInside:
         self.max_of_id_dict = {}
         self.child_threads = []
         self.controller_message_queue = None  # This is a shared object. The lifecycle of this queue is managed by the parent.
+
 
     def prepare(self, global_config: GlobalConfigIR) -> None:
         self.boards = global_config.config["crawler"]["dc_inside"]["config"]["boards"]

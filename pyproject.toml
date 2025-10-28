@@ -1,22 +1,15 @@
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
 [project]
-name = "bbs_crawl_and_notify"
+name = "bbs-crawl-and-notify"
 version = "1.0.0"
 description = "This project retrieves content from websites and sends it to a Telegram chat room."
-authors = [
-    { name="Zhang-hoon Dennis Oh", email="zhanghoondennisoh@gmail.com" }
-]
-license = { text = "APACHE-2.0" }
-requires-python = ">=3.13.1"
+readme = "README.md"
+requires-python = ">=3.13"
 dependencies = [
-    #
+    "bs4>=0.0.2",
+    "dc-api>=0.8.0",
+    "filetype>=1.2.0",
+    "loguru>=0.7.3",
+    "pyyaml>=6.0.3",
+    "requests>=2.32.5",
+    "selenium>=4.38.0",
 ]
-
-[tool.setuptools]
-package-dir = {"" = "src"}
-
-[tool.setuptools.packages.find]
-where = ["src"]
